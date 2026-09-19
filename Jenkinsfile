@@ -51,5 +51,10 @@ pipeline {
                 }
             }
         }
+        stage('Deploy') {
+            steps {
+                sh '/opt/hello-cicd/deploy.sh "$BUILD_NUMBER"'
+            }
+        }
     }
 }
