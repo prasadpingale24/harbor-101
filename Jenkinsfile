@@ -54,7 +54,11 @@ PY
 
             echo "Harbor scan status: ${status}"
 
-            if (status == 'Complete' || status == 'Finished') {
+            if (
+                status == 'Complete' ||
+                status == 'Finished' ||
+                status == 'Success'
+            ) {
                 echo "Harbor vulnerability scan completed."
                 return true
             }
