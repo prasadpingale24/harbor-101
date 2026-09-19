@@ -1,6 +1,8 @@
 # Use official Node.js 22 LTS Alpine image
 FROM node:22-alpine
 
+RUN npm install -g npm@12.0.2
+
 # Set working directory
 WORKDIR /usr/src/app
 
