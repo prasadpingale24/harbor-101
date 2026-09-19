@@ -2,12 +2,21 @@ def harborArtifactUrl() {
     return "https://${env.REGISTRY}/api/v2.0/projects/${env.HARBOR_PROJECT}/repositories/${env.HARBOR_REPOSITORY}/artifacts/${env.IMAGE_TAG}"
 }
 
-def harborVulnerabilityUrl() {
-    return "${harborArtifactUrl()}/additions/vulnerabilities"
-}
+def getHarborArtifact() {
+    sh(
+        script: '''
+            curl -fsSk \
+                --user "$HARBOR_USER:$HARBOR_PASSWORD" \
+                -H "X-Accept-Vulnerabilities: application/vnd.security.vulnerability.report; version=1.1" \
+                -o harbor-artifact.json \
+                "${HARBOR_ARTIFACT_URL}?with_scan_overview=true"
+        ''',
+        environment: [
+            "HARBOR_ARTIFACT_URL=${harborArtifactUrl()}"
+        ]
+    )
 
-def harborHeaders() {
-    return "--user \"${env.HARBOR_USER}:${env.HARBOR_PASSWORD}\""
+    return readJSON file: 'harbor-artifact.json'
 }
 
 def waitForHarborScan() {
@@ -15,64 +24,74 @@ def waitForHarborScan() {
 
     timeout(time: 5, unit: 'MINUTES') {
         waitUntil {
-            def status = sh(
-                script: """
-                    curl -sk ${harborHeaders()} \
-                        -o harbor-vulnerability-report.json \
-                        -w "%{http_code}" \
-                        "${harborVulnerabilityUrl()}"
-                """,
-                returnStdout: true
-            ).trim()
+            def artifact = getHarborArtifact()
 
-            if (status == '200') {
-                echo "Harbor vulnerability scan completed."
-                return true
+            def scanOverview =
+                artifact.scan_overview ?: [:]
+
+            def status = scanOverview.values()?.find { it }?.scan_status
+
+            echo "Harbor scan status: ${status ?: 'NOT_SCANNED'}"
+
+            switch (status) {
+                case 'Complete':
+                    echo "Harbor vulnerability scan completed."
+                    return true
+
+                case 'Scanning':
+                case 'Queued':
+                case 'Pending':
+                    sleep 10
+                    return false
+
+                case 'Error':
+                case 'Failed':
+                    error("Harbor vulnerability scan failed.")
+
+                default:
+                    sleep 10
+                    return false
             }
-
-            echo "Harbor scan not ready yet (HTTP ${status}). Retrying..."
-            sleep 10
-
-            return false
         }
     }
 }
 
-def getVulnerabilityCounts() {
-    return sh(
-        script: '''
-            python3 <<'PY'
-import json
+def getVulnerabilityReport() {
+    sh '''
+        curl -fsSk \
+            --user "$HARBOR_USER:$HARBOR_PASSWORD" \
+            -o harbor-vulnerability-report.json \
+            "$HARBOR_VULNERABILITY_URL"
+    '''
 
-with open("harbor-vulnerability-report.json") as f:
-    data = json.load(f)
-
-report = next(iter(data.values()))
-vulnerabilities = report.get("vulnerabilities", [])
-
-counts = {
-    "Critical": 0,
-    "High": 0,
-    "Medium": 0,
-    "Low": 0,
-    "Unknown": 0
+    return readJSON file: 'harbor-vulnerability-report.json'
 }
 
-for vulnerability in vulnerabilities:
-    severity = vulnerability.get("severity", "Unknown")
-    counts[severity] = counts.get(severity, 0) + 1
+def getVulnerabilityCounts(report) {
+    def vulnerabilityData = report.values().find { it?.vulnerabilities != null }
 
-print(
-    f'{counts["Critical"]} '
-    f'{counts["High"]} '
-    f'{counts["Medium"]} '
-    f'{counts["Low"]} '
-    f'{counts["Unknown"]}'
-)
-PY
-        ''',
-        returnStdout: true
-    ).trim().split()
+    def vulnerabilities =
+        vulnerabilityData?.vulnerabilities ?: []
+
+    def counts = [
+        Critical: 0,
+        High: 0,
+        Medium: 0,
+        Low: 0,
+        Unknown: 0
+    ]
+
+    vulnerabilities.each { vulnerability ->
+        def severity = vulnerability.severity ?: 'Unknown'
+
+        if (!counts.containsKey(severity)) {
+            counts[severity] = 0
+        }
+
+        counts[severity]++
+    }
+
+    return counts
 }
 
 def printSecurityReport(counts) {
@@ -80,22 +99,20 @@ def printSecurityReport(counts) {
 ========================================
         HARBOR SECURITY SCAN
 ========================================
-Critical : ${counts[0]}
-High     : ${counts[1]}
-Medium   : ${counts[2]}
-Low      : ${counts[3]}
-Unknown  : ${counts[4]}
+Critical : ${counts.Critical}
+High     : ${counts.High}
+Medium   : ${counts.Medium}
+Low      : ${counts.Low}
+Unknown  : ${counts.Unknown}
 ========================================
 """
 }
 
 def enforceSecurityPolicy(counts) {
-    def critical = counts[0].toInteger()
-
-    if (critical > 0) {
+    if (counts.Critical > 0) {
         error(
             "SECURITY GATE FAILED: " +
-            "${critical} Critical vulnerability/vulnerabilities found."
+            "${counts.Critical} Critical vulnerability/vulnerabilities found."
         )
     }
 
@@ -180,9 +197,21 @@ pipeline {
                     )
                 ]) {
                     script {
+
+                        def artifactUrl = harborArtifactUrl()
+
+                        env.HARBOR_ARTIFACT_URL = artifactUrl
+
+                        env.HARBOR_VULNERABILITY_URL =
+                            "${artifactUrl}/additions/vulnerabilities"
+
                         waitForHarborScan()
 
-                        def counts = getVulnerabilityCounts()
+                        def report =
+                            getVulnerabilityReport()
+
+                        def counts =
+                            getVulnerabilityCounts(report)
 
                         printSecurityReport(counts)
 
@@ -208,7 +237,11 @@ pipeline {
 
     post {
         always {
-            sh 'rm -f harbor-vulnerability-report.json || true'
+            sh '''
+                rm -f \
+                    harbor-artifact.json \
+                    harbor-vulnerability-report.json
+            '''
         }
     }
 }
