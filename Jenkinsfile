@@ -5,7 +5,8 @@ pipeline {
 
     environment {
         APP_NAME = 'hello-cicd'
-        IMAGE_TAG = "${env.BUILD_NUMBER ?: 'latest'}"
+        REGISTRY = 'registry.pspworks.cloud'
+        IMAGE_TAG = "${env.BUILD_NUMBER}"
     }
 
     stages {
@@ -24,14 +25,31 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    echo "Building Docker image: ${APP_NAME}:${IMAGE_TAG}"
-                    sh "docker build -t ${APP_NAME}:${IMAGE_TAG} ."
+                    sh "docker build -t ${REGISTRY}/${APP_NAME}/${APP_NAME}:${IMAGE_TAG} ."
                 }
             }
         }
 
-        // Docker Login
-        // Push to Harbor
-        // Deploy
+        stage('Push to Harbor') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'harbor-registry',
+                        usernameVariable: 'HARBOR_USER',
+                        passwordVariable: 'HARBOR_PASSWORD'
+                    )
+                ]) {
+                    sh '''
+                        echo "$HARBOR_PASSWORD" | docker login "$REGISTRY" \
+                            --username "$HARBOR_USER" \
+                            --password-stdin
+
+                        docker push "$REGISTRY/$APP_NAME/$APP_NAME:$IMAGE_TAG"
+
+                        docker logout "$REGISTRY"
+                    '''
+                }
+            }
+        }
     }
 }
