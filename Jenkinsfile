@@ -7,6 +7,10 @@ pipeline {
         APP_NAME = 'hello-cicd'
         REGISTRY = 'registry.pspworks.cloud'
         IMAGE_TAG = "${env.BUILD_NUMBER}"
+
+        DEPLOY_HOST = '72.60.78.85'
+        DEPLOY_PORT = '22022'
+        DEPLOY_USER = 'deploy'
     }
 
     stages {
@@ -53,7 +57,14 @@ pipeline {
         }
         stage('Deploy') {
             steps {
-                sh '/opt/hello-cicd/deploy.sh "$BUILD_NUMBER"'
+                sshagent(credentials: ['deploy-ssh']) {
+                    sh '''
+                        ssh -p "$DEPLOY_PORT" \
+                            -o StrictHostKeyChecking=no \
+                            "$DEPLOY_USER@$DEPLOY_HOST" \
+                            "/opt/hello-cicd/deploy.sh $BUILD_NUMBER"
+                    '''
+                }
             }
         }
     }
