@@ -1,4 +1,3 @@
-```groovy
 def harborArtifactUrl() {
     return "https://${env.REGISTRY}/api/v2.0/projects/${env.HARBOR_PROJECT}/repositories/${env.HARBOR_REPOSITORY}/artifacts/${env.IMAGE_TAG}"
 }
@@ -311,4 +310,3 @@ pipeline {
         }
     }
 }
-```
