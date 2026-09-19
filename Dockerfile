@@ -1,22 +1,19 @@
-# Use official Node.js 22 LTS Alpine image
-FROM node:22-alpine
+FROM node:22-alpine AS builder
 
-RUN npm install -g npm@12.0.2
+WORKDIR /app
 
-# Set working directory
-WORKDIR /usr/src/app
-
-# Copy package files first to leverage Docker layer caching
 COPY package*.json ./
 
-# Install dependencies
-RUN npm install --only=production
+RUN npm install --omit=dev
 
-# Copy the rest of the application code
-COPY . .
 
-# Expose the application port
+FROM node:22-alpine
+
+WORKDIR /app
+
+COPY --from=builder /app/node_modules ./node_modules
+COPY server.js package.json ./
+
 EXPOSE 3000
 
-# Start the application
 CMD ["node", "server.js"]
