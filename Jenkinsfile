@@ -1,4 +1,4 @@
-@Library('cicd-library@main') _
+@Library('cicd-library') _
 
 pipeline {
 
@@ -8,9 +8,15 @@ pipeline {
 
     stages {
 
-        stage('Shared Library Test') {
+        stage('Harbor Scan') {
             steps {
-                hello()
+                harborScan(
+                    registry: 'registry.pspworks.cloud',
+                    project: 'hello-cicd',
+                    repository: 'hello-cicd',
+                    reference: '13',
+                    credentials: 'harbor-registry'
+                )
             }
         }
     }
