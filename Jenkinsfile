@@ -8,14 +8,15 @@ pipeline {
 
     stages {
 
-        stage('Harbor Scan') {
+        stage('Wait for Harbor Scan') {
             steps {
-                harborScan(
+                harborScanWait(
                     registry: 'registry.pspworks.cloud',
                     project: 'hello-cicd',
                     repository: 'hello-cicd',
                     reference: '13',
-                    credentials: 'harbor-registry'
+                    credentials: 'harbor-registry',
+                    timeoutMinutes: 5
                 )
             }
         }
