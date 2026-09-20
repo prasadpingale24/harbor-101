@@ -17,5 +17,14 @@ pipeline {
             }
         }
 
+        stage('Docker Push') {
+            steps {
+                dockerPush(
+                    image: 'registry.pspworks.cloud/hello-cicd/hello-cicd',
+                    tag: "${BUILD_NUMBER}",
+                    credentials: 'harbor-registry'
+                )
+            }
+        }
     }
 }
