@@ -10,7 +10,7 @@ pipeline {
 
         stage('Shared Library Test') {
             steps {
-                echo 'Shared library loaded successfully.'
+                hello()
             }
         }
     }
