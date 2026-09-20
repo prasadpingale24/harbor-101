@@ -9,6 +9,10 @@ pipeline {
     environment {
         IMAGE = 'registry.pspworks.cloud/hello-cicd/hello-cicd'
 
+        HARBOR_REGISTRY = 'registry.pspworks.cloud'
+        HARBOR_PROJECT = 'hello-cicd'
+        HARBOR_REPOSITORY = 'hello-cicd'
+
         DEPLOY_HOST = '72.60.78.85'
         DEPLOY_PORT = '22022'
         DEPLOY_USER = 'deploy'
@@ -32,6 +36,50 @@ pipeline {
                     tag: "${BUILD_NUMBER}",
                     credentials: 'harbor-registry'
                 )
+            }
+        }
+
+        stage('Harbor Scan') {
+            steps {
+                harborScan(
+                    registry: "${HARBOR_REGISTRY}",
+                    project: "${HARBOR_PROJECT}",
+                    repository: "${HARBOR_REPOSITORY}",
+                    reference: "${BUILD_NUMBER}",
+                    credentials: 'harbor-registry'
+                )
+            }
+        }
+
+        stage('Wait for Scan') {
+            steps {
+                harborScanWait(
+                    registry: "${HARBOR_REGISTRY}",
+                    project: "${HARBOR_PROJECT}",
+                    repository: "${HARBOR_REPOSITORY}",
+                    reference: "${BUILD_NUMBER}",
+                    credentials: 'harbor-registry',
+                    timeoutMinutes: 5
+                )
+            }
+        }
+
+        stage('Security Report') {
+            steps {
+                script {
+
+                    def report = harborReport(
+                        registry: "${HARBOR_REGISTRY}",
+                        project: "${HARBOR_PROJECT}",
+                        repository: "${HARBOR_REPOSITORY}",
+                        reference: "${BUILD_NUMBER}",
+                        credentials: 'harbor-registry'
+                    )
+
+                    vulnerabilityPolicy(
+                        report: report
+                    )
+                }
             }
         }
 
