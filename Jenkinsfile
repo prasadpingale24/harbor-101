@@ -8,9 +8,10 @@ pipeline {
 
     stages {
 
-        stage('Harbor Report') {
+        stage('Security Policy') {
             steps {
                 script {
+
                     def report = harborReport(
                         registry: 'registry.pspworks.cloud',
                         project: 'hello-cicd',
@@ -19,12 +20,9 @@ pipeline {
                         credentials: 'harbor-registry'
                     )
 
-                    echo "Critical: ${report.critical()}"
-                    echo "High: ${report.high()}"
-                    echo "Medium: ${report.medium()}"
-                    echo "Low: ${report.low()}"
-                    echo "Unknown: ${report.unknown()}"
-                    echo "Total: ${report.total()}"
+                    vulnerabilityPolicy(
+                        report: report
+                    )
                 }
             }
         }
