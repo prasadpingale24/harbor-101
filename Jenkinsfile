@@ -1,4 +1,4 @@
-@Library('cicd-library') _
+@Library('cicd-library@main') _
 
 pipeline {
 
